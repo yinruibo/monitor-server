@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="cn.hongt.monitor.server.mapper.ZrWarnRecordEleMapper">
+
+    <select id="queryFaultList" resultType="cn.hongt.monitor.server.dto.output.WarnFaultOutput">
+         select t.obstime as obstime,count(1) as timeNumber from (select to_char(create_time,'YYYY-MM-DD') as obstime
+         from zr_warn_record_ele where status = 1 and ip =#{ip}
+         and create_time between #{start} and #{end}) t group by t.obstime
+    </select>
+
+</mapper>

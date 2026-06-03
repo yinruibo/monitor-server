@@ -1,0 +1,20 @@
+version: "2"
+services:
+  monitor-server:
+    image: monitor-server:1.0.0
+    hostname: monitor-server
+    container_name: monitor-server
+    ports:
+      - "10020:10020"
+    volumes:
+      - /home/docker/logs/monitor-server/:/app/logs   # 系统日志路径
+    environment:
+      - TZ=Asia/Shanghai
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_OPTS="-Dfile.encoding=UTF-8"
+
+networks:
+  default:
+    external:
+      name: yml_default
