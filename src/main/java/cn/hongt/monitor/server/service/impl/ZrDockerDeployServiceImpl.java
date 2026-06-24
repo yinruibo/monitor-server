@@ -1,6 +1,8 @@
 package cn.hongt.monitor.server.service.impl;
 
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.DockerDeployInput;
+import cn.hongt.monitor.server.dto.input.NodeDataInput;
 import cn.hongt.monitor.server.dto.output.DockerImagesOutput;
 import cn.hongt.monitor.server.entity.SysDockerDeployEleDO;
 import cn.hongt.monitor.server.enums.WarnRecordEnum;
@@ -35,7 +37,7 @@ public class ZrDockerDeployServiceImpl extends ServiceImpl<ZrDockerDeployMapper,
     public List<SysDockerDeployEleDO> queryNodeAndServers(String nodeName) {
         return this.baseMapper.selectList(new QueryWrapper<SysDockerDeployEleDO>().lambda()
                 .select(SysDockerDeployEleDO::getNodeName, SysDockerDeployEleDO::getIp)
-                .eq(SysDockerDeployEleDO::getNodeName, nodeName)
+                .eq(StringUtils.isNotBlank(nodeName),SysDockerDeployEleDO::getNodeName, nodeName)
                 .eq(SysDockerDeployEleDO::getIsShow, 0)
                 .isNotNull(SysDockerDeployEleDO::getIp)
                 .groupBy(SysDockerDeployEleDO::getNodeName, SysDockerDeployEleDO::getIp));
@@ -51,11 +53,11 @@ public class ZrDockerDeployServiceImpl extends ServiceImpl<ZrDockerDeployMapper,
     }
 
     @Override
-    public List<DockerImagesOutput> queryDockerNameList(String nodeName, String ip) {
+    public List<DockerImagesOutput> queryDockerNameList(NodeDataInput input) {
         List<DockerImagesOutput> outputList = new ArrayList<>();
         LambdaQueryWrapper<SysDockerDeployEleDO> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(StringUtils.isNotBlank(ip), SysDockerDeployEleDO::getIp, ip);
-        queryWrapper.eq(StringUtils.isNotBlank(nodeName), SysDockerDeployEleDO::getNodeName, nodeName);
+        queryWrapper.eq(StringUtils.isNotBlank(input.getIp()), SysDockerDeployEleDO::getIp, input.getIp());
+        queryWrapper.eq(StringUtils.isNotBlank(input.getNodeName()), SysDockerDeployEleDO::getNodeName, input.getNodeName());
         queryWrapper.eq(SysDockerDeployEleDO::getType, WarnRecordEnum.docker_cpu.getCode());
         queryWrapper.eq(SysDockerDeployEleDO::getIsShow, 0);
         List<SysDockerDeployEleDO> dockerDeployS = this.baseMapper.selectList(queryWrapper);
@@ -102,8 +104,8 @@ public class ZrDockerDeployServiceImpl extends ServiceImpl<ZrDockerDeployMapper,
     }
 
     @Override
-    public void deleteDeployList(List<String> idList) {
-        this.baseMapper.deleteBatchIds(idList);
+    public void deleteDeployList(IdListInput input) {
+        this.baseMapper.deleteBatchIds(input.getIdList());
     }
 
     private SysDockerDeployEleDO buildBatchUpdateEntity(SysDockerDeployEleDO input) {

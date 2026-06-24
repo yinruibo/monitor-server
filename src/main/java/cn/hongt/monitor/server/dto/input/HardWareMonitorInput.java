@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import javax.validation.constraints.NotBlank;
+import java.util.List;
 
 @ApiModel(value = "查询硬件监控")
 @Data
@@ -40,11 +41,11 @@ public class HardWareMonitorInput {
      * 节点编号
      */
     @ApiModelProperty(value = "数据类型 ：linux_cpu：CPU，linux_memory：内存，linux_disk：磁盘目录1")
-    private String type;
+    private List<String> typeList;
 
     /**
      * docker中容器名称
      */
     @ApiModelProperty("docker中容器名称")
-    private String dockerName;
+    private List<String> dockerNameList;
 }

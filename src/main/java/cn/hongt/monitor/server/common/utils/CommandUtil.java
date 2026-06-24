@@ -2,7 +2,9 @@ package cn.hongt.monitor.server.common.utils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 import java.io.BufferedReader;
 import java.io.Closeable;
 import java.io.IOException;
@@ -11,18 +13,14 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.Executor;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author yrb
@@ -30,26 +28,22 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @Description: 调用Linux命令工具类
  */
 @Slf4j
-public final class CommandUtil {
+@Component
+public class CommandUtil {
+
+    private CommandUtil() {
+    }
 
     private static final long DEFAULT_TIMEOUT_MS = 10_000L;
     private static final int DESTROY_WAIT_SECONDS = 1;
     private static final int STREAM_READ_WAIT_SECONDS = 3;
     private static final int LOG_OUTPUT_MAX_LENGTH = 1000;
-    private static final Long DEFAULT_DISK_IO_VALUE = 0L;
-    private static final AtomicInteger STREAM_READER_THREAD_INDEX = new AtomicInteger(1);
-    private static final ExecutorService STREAM_READER_EXECUTOR = createStreamReaderExecutor();
+    private static volatile Executor commandExecutor;
 
-    static {
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                shutdownStreamReaderExecutor();
-            }
-        }, "command-util-shutdown"));
-    }
-
-    private CommandUtil() {
+    @Autowired
+    @Qualifier("commandExecutor")
+    public void setCommandExecutor(Executor executor) {
+        CommandUtil.commandExecutor = executor;
     }
 
     public static String execuCmd(String cmd) {
@@ -83,57 +77,6 @@ public final class CommandUtil {
         return output;
     }
 
-    public static HashMap<String, List<String>> dockerStatsCmd(String[] cmd) {
-        //log.info("dockerStatsCmd 开始执行命令，cmd={}", Arrays.toString(cmd));
-        HashMap<String, List<String>> dockerStatsMap = new HashMap<String, List<String>>();
-        CommandResult result = executeCommand(cmd, DEFAULT_TIMEOUT_MS);
-        logWhenFailed("dockerStatsCmd", result);
-
-        for (String line : result.stdoutLines) {
-            if (StringUtils.isBlank(line)) {
-                continue;
-            }
-            List<String> tempList = Arrays.asList(line.replaceAll("\\s{2,}", ",").split(","));
-            if (tempList.size() <= 4 || StringUtils.isBlank(tempList.get(1))) {
-                log.warn("dockerStatsCmd 输出格式异常，line={}", line);
-                continue;
-            }
-            dockerStatsMap.put(tempList.get(1), tempList);
-        }
-        //log.info("dockerStatsCmd 解析完成，containerCount={}", dockerStatsMap.size());
-        return dockerStatsMap;
-    }
-
-    public static HashMap<String, Long> dockerDiskIOCmd(String[] cmd) {
-        //log.info("dockerDiskIOCmd 开始执行命令，cmd={}", Arrays.toString(cmd));
-        HashMap<String, Long> dockerDiskIOMap = defaultDockerDiskIOMap();
-        CommandResult result = executeCommand(cmd, DEFAULT_TIMEOUT_MS);
-        logWhenFailed("dockerDiskIOCmd", result);
-
-        String firstLine = firstNonBlankLine(result.stdoutLines);
-        if (StringUtils.isBlank(firstLine)) {
-            //log.info("dockerDiskIOCmd 未读取到有效输出，返回默认值 read=0, write=0");
-            return dockerDiskIOMap;
-        }
-
-        String[] tokens = firstLine.trim().split("\\s+");
-        if (tokens.length <= 7) {
-            log.warn("dockerDiskIOCmd 输出字段不足，line={}", firstLine);
-            return dockerDiskIOMap;
-        }
-
-        Long readValue = parseLongSafely(tokens[3], "read", firstLine);
-        Long writeValue = parseLongSafely(tokens[7], "write", firstLine);
-        if (readValue != null) {
-            dockerDiskIOMap.put("read", readValue);
-        }
-        if (writeValue != null) {
-            dockerDiskIOMap.put("write", writeValue);
-        }
-        //log.info("dockerDiskIOCmd 解析完成，read={}, write={}", dockerDiskIOMap.get("read"), dockerDiskIOMap.get("write"));
-        return dockerDiskIOMap;
-    }
-
     private static CommandResult executeCommand(String[] cmd, long timeoutMs) {
         String commandText = Arrays.toString(cmd);
         if (isInvalidCommand(cmd)) {
@@ -142,15 +85,30 @@ public final class CommandUtil {
                     Collections.singletonList("invalid command"), 0L, timeoutMs, new IllegalArgumentException("invalid command"));
         }
 
+        Executor executor = commandExecutor;
+        if (executor == null) {
+            log.error("commandExecutor 未注入，无法执行命令，command={}", commandText);
+            return new CommandResult(cmd, -1, false, Collections.<String>emptyList(),
+                    Collections.singletonList("commandExecutor not initialized"), 0L, timeoutMs, new IllegalStateException("commandExecutor not initialized"));
+        }
+
         long start = System.currentTimeMillis();
         Process process = null;
-        ExecutorService executor = STREAM_READER_EXECUTOR;
+        FutureTask<List<String>> stdoutTask = null;
+        FutureTask<List<String>> stderrTask = null;
         //log.info("开始执行系统命令，command={}, timeoutMs={}", commandText, timeoutMs);
         try {
-            process = new ProcessBuilder(cmd).start();
+            ProcessBuilder processBuilder = new ProcessBuilder(cmd);
+            process = processBuilder.start();
             final Process currentProcess = process;
-            Future<List<String>> stdoutFuture = executor.submit(new StreamReader(currentProcess.getInputStream()));
-            Future<List<String>> stderrFuture = executor.submit(new StreamReader(currentProcess.getErrorStream()));
+
+            // 使用 commandExecutor 执行流读取任务。
+            // FutureTask 桥接 Callable → Runnable，兼容 Executor 接口。
+            // stdout 和 stderr 分开读取，避免 Docker CLI 的 stderr 警告混入 stdout 导致解析损坏。
+            stdoutTask = new FutureTask<>(new StreamReader(currentProcess.getInputStream()));
+            stderrTask = new FutureTask<>(new StreamReader(currentProcess.getErrorStream()));
+            executor.execute(stdoutTask);
+            executor.execute(stderrTask);
 
             boolean finished = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
             if (!finished) {
@@ -161,8 +119,8 @@ public final class CommandUtil {
                 }
             }
 
-            List<String> stdoutLines = getFutureLines(stdoutFuture, "stdout", cmd);
-            List<String> stderrLines = getFutureLines(stderrFuture, "stderr", cmd);
+            List<String> stdoutLines = getFutureLines(stdoutTask, "stdout", cmd);
+            List<String> stderrLines = getFutureLines(stderrTask, "stderr", cmd);
             long durationMs = System.currentTimeMillis() - start;
             int exitCode = finished ? process.exitValue() : -1;
             if (finished && exitCode == 0) {
@@ -174,14 +132,18 @@ public final class CommandUtil {
                     Collections.singletonList("start process failed: " + e.getMessage()), System.currentTimeMillis() - start, timeoutMs, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            if (stdoutTask != null) {
+                stdoutTask.cancel(true);
+            }
+            if (stderrTask != null) {
+                stderrTask.cancel(true);
+            }
             if (process != null) {
                 process.destroyForcibly();
             }
             return new CommandResult(cmd, -1, false, Collections.<String>emptyList(),
                     Collections.singletonList("command interrupted: " + e.getMessage()), System.currentTimeMillis() - start, timeoutMs, e);
         } finally {
-            // 全局线程池 STREAM_READER_EXECUTOR 的生命周期由 shutdownHook 管理（见第43-50行），
-            // 不应在此处 shutdown，否则第一次命令执行后线程池即废，后续命令全部失败。
             if (process != null) {
                 closeQuietly(process.getInputStream());
                 closeQuietly(process.getErrorStream());
@@ -191,42 +153,19 @@ public final class CommandUtil {
         }
     }
 
-
-    private static ExecutorService createStreamReaderExecutor() {
-        return Executors.newFixedThreadPool(2, new ThreadFactory() {
-            @Override
-            public Thread newThread(Runnable runnable) {
-                Thread thread = new Thread(runnable, "command-util-stream-" + STREAM_READER_THREAD_INDEX.getAndIncrement());
-                thread.setDaemon(true);
-                return thread;
-            }
-        });
-    }
-
-    private static void shutdownStreamReaderExecutor() {
-        STREAM_READER_EXECUTOR.shutdown();
+    private static List<String> getFutureLines(FutureTask<List<String>> task, String streamName, String[] cmd) {
         try {
-            if (!STREAM_READER_EXECUTOR.awaitTermination(DESTROY_WAIT_SECONDS, TimeUnit.SECONDS)) {
-                STREAM_READER_EXECUTOR.shutdownNow();
-            }
+            return task.get(STREAM_READ_WAIT_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            STREAM_READER_EXECUTOR.shutdownNow();
-        }
-    }
-    private static List<String> getFutureLines(Future<List<String>> future, String streamName, String[] cmd) {
-        try {
-            return future.get(STREAM_READ_WAIT_SECONDS, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            future.cancel(true);
+            task.cancel(true);
             // 流读取失败意味着命令输出数据丢失，升级为 ERROR 便于运维发现
             log.error("读取{}被中断，command={}", streamName, Arrays.toString(cmd));
         } catch (ExecutionException e) {
-            future.cancel(true);
+            task.cancel(true);
             log.error("读取{}失败，command={}, error={}", streamName, Arrays.toString(cmd), e.getMessage());
         } catch (TimeoutException e) {
-            future.cancel(true);
+            task.cancel(true);
             log.error("读取{}超时，command={}, error={}", streamName, Arrays.toString(cmd), e.getMessage());
         }
         return Collections.emptyList();
@@ -262,27 +201,6 @@ public final class CommandUtil {
         return out.toString();
     }
 
-    private static String firstNonBlankLine(List<String> lines) {
-        if (lines == null || lines.isEmpty()) {
-            return "";
-        }
-        for (String line : lines) {
-            if (StringUtils.isNotBlank(line)) {
-                return line;
-            }
-        }
-        return "";
-    }
-
-    private static Long parseLongSafely(String value, String fieldName, String line) {
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException e) {
-            log.warn("dockerDiskIOCmd 解析{}失败，value={}, line={}", fieldName, value, line);
-            return null;
-        }
-    }
-
     private static boolean isInvalidCommand(String[] cmd) {
         if (cmd == null || cmd.length == 0) {
             return true;
@@ -293,13 +211,6 @@ public final class CommandUtil {
             }
         }
         return false;
-    }
-
-    private static HashMap<String, Long> defaultDockerDiskIOMap() {
-        HashMap<String, Long> dockerDiskIOMap = new HashMap<String, Long>();
-        dockerDiskIOMap.put("read", DEFAULT_DISK_IO_VALUE);
-        dockerDiskIOMap.put("write", DEFAULT_DISK_IO_VALUE);
-        return dockerDiskIOMap;
     }
 
     private static void logWhenFailed(String methodName, CommandResult result) {
@@ -392,6 +303,3 @@ public final class CommandUtil {
         }
     }
 }
-
-
-

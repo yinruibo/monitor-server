@@ -3,6 +3,7 @@ package cn.hongt.monitor.server.service.impl;
 import cn.hongt.monitor.server.common.consts.Const;
 import cn.hongt.monitor.server.common.consts.StationConst;
 import cn.hongt.monitor.server.common.utils.*;
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.ZrWarnRecordListInput;
 import cn.hongt.monitor.server.dto.output.WarnFaultOutput;
 import cn.hongt.monitor.server.dto.output.WarnRecordOutput;
@@ -116,8 +117,8 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
     }
 
     @Override
-    public void deleteWarnRecord(List<String> ids) {
-        this.baseMapper.deleteBatchIds(ids);
+    public void deleteWarnRecord(IdListInput input) {
+        this.baseMapper.deleteBatchIds(input.getIdList());
     }
 
     @Override
@@ -164,6 +165,9 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
 
     @Override
     public Result<List<WarnFaultOutput>> queryFaultList(ZrWarnRecordListInput input) {
+        if(StringUtils.isBlank(input.getStartTime()) || StringUtils.isBlank(input.getEndTime())){
+            return ResultUtil.errorMsg("开始、结束时间不能为空");
+        }
         Date start = DateUtils.stringToDate(input.getStartTime(),DateUtils.dateType5);
         Date end = DateUtils.stringToDate(input.getEndTime(),DateUtils.dateType5);
         if(start.after(end)){
@@ -174,8 +178,8 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
     }
 
     @Override
-    public Result<String> queryExport(List<String> idList) {
-        List<ZrWarnRecordEleDO> zrWarnList = this.baseMapper.selectList(new LambdaQueryWrapper<ZrWarnRecordEleDO>().in(ZrWarnRecordEleDO::getId,idList));
+    public Result<String> queryExport(IdListInput input) {
+        List<ZrWarnRecordEleDO> zrWarnList = this.baseMapper.selectList(new LambdaQueryWrapper<ZrWarnRecordEleDO>().in(ZrWarnRecordEleDO::getId,input.getIdList()));
          //临时生成测试数据
         String day = DateUtils.dateToString(new Date(),DateUtils.dateType6);
         String fileName = "告警监控日志"+day+".xls";
@@ -211,20 +215,16 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
             dataList.add(datas);
         }
         //1-创建一个HSSFWorkbook
-        ExcelObjectUtils excel = new ExcelObjectUtils("Sheet1");
-        //2-写入头标题
-//        String headTitleFirst = "这是头标题";
-        int colunmNum = zrWarnList.size();
-//        excel.createHeadTile(colunmNum,headTitleFirst);//头标默认写在第一行
-        //3-写入行标题
-        excel.createRowTitle(headTitleList,0);
-        //4-写入具体数据
-        excel.createDataByRow(1,dataList);//因为没有行标题，所以从第二行开始
-        //5-生成excel文件
         String path = Paths.get(Const.warnRecordPath).resolve(fileName).toString();
-        try {
+        try (ExcelObjectUtils excel = new ExcelObjectUtils("Sheet1")) {
+            //2-写入头标题
+            //3-写入行标题
+            excel.createRowTitle(headTitleList, 0);
+            //4-写入具体数据
+            excel.createDataByRow(1, dataList);
+            //5-生成excel文件
             File file = new File(Const.warnRecordPath);
-            if(!file.exists()){
+            if (!file.exists()) {
                 file.mkdirs();
             }
             excel.buildExcelFile(path);
@@ -232,8 +232,6 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
             log.error("生成Excel文档失败: {}", path, e);
             return ResultUtil.errorMsg("生成Excel文档失败");
         }
-        //6-浏览器下载exceltry {
-//      excel.buildExcelDocument(fileName,response,request);
         return ResultUtil.success(path);
     }
 
@@ -273,7 +271,8 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
         Date day = DateUtils.stringToDate(DateUtils.dateToString(new Date(),DateUtils.DATE_FORMAT_YYYY_MM_DD)+" 00:00:00",DateUtils.dateType5);
         Date tomorrow = DateUtil.offsetDay(day, 1);
         Integer warnCount = this.baseMapper.selectCount(new LambdaQueryWrapper<ZrWarnRecordEleDO>()
-                .eq(ZrWarnRecordEleDO::getIp,ip).between(ZrWarnRecordEleDO::getCreateTime,day,tomorrow));
+                .eq(StringUtils.isNotBlank(ip),ZrWarnRecordEleDO::getIp,ip)
+                .between(ZrWarnRecordEleDO::getCreateTime,day,tomorrow));
         return ResultUtil.success(warnCount);
     }
 
@@ -487,7 +486,7 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
 
     // 新增、检验 docker告警记录信息
     @Transactional
-    private void insertWarnDockerRecord(String monitorIp, List<ZrDockerRecordEleDO> dockerRecordList) {
+    public void insertWarnDockerRecord(String monitorIp, List<ZrDockerRecordEleDO> dockerRecordList) {
         if (dockerRecordList == null || dockerRecordList.isEmpty()) {
             return;
         }
@@ -572,7 +571,7 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
                 //todo 容器填写默认排序
                 if(dockerDepList.isEmpty()){
                     SysDockerDeployEleDO dockerDeployEle = SysDockerDeployEleDO.builder().id(IdUtil.fastSimpleUUID()).ip(monitorIp)
-                            .nodeName("服务中心").taskName(contName).dockerName(contName).isShow(0).type(dockerCode).sort(i).createTime(new Date()).build();
+                            .nodeName("气象中心").taskName(contName).dockerName(contName).isShow(0).type(dockerCode).sort(i).createTime(new Date()).build();
                     dockerDeployMapper.insert(dockerDeployEle);
                     StationConst.dockerDepMap.put(cacheKey,dockerDeployEle);
                 }else {
@@ -821,7 +820,7 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
              // 计算使用率
              double usage = ((double) (totalDiff - idleDiff) / totalDiff) * 100;
              return new BigDecimal(usage).setScale(2,BigDecimal.ROUND_HALF_UP).toString();
-         } catch (IOException e) {
+         } catch (NumberFormatException | IOException e) {
              log.error("CPU 硬件监控文件读取失败: {}", procStatFile, e);
          } catch (InterruptedException e) {
              Thread.currentThread().interrupt(); // 恢复中断状态
@@ -849,7 +848,7 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
                     cachedMem = Long.parseLong(line.split("\\s+")[1]) * 1024; // 转换成字节
                 }
             }
-        } catch (IOException e) {
+        } catch (NumberFormatException | IOException e) {
             log.error("内存配置文件读取失败: {}", procMemoryFile, e);
             return "0.00";
         }
@@ -1010,7 +1009,7 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
                         .eq(SysLinuxDeployDO::getIp, monitorIp).eq(SysLinuxDeployDO::getType,linuxCode));
                 if(linuxDepList.isEmpty()){
             SysLinuxDeployDO sysLinuxDep = SysLinuxDeployDO.builder().id(IdUtil.fastSimpleUUID()).ip(monitorIp).type(linuxCode)
-                            .nodeName("服务中心").ipName(monitorIp).createTime(new Date()).sort(0).isShow(0).build();
+                            .nodeName("气象中心").ipName(monitorIp).createTime(new Date()).sort(0).isShow(0).build();
                     StationConst.linuxDepMap.put(linuxCode,sysLinuxDep);
                     linuxDeployMapper.insert(sysLinuxDep);
                 }else {
@@ -1036,7 +1035,7 @@ public class ZrWarnRecordEleServiceImpl extends ServiceImpl<ZrWarnRecordEleMappe
 
     // 新增、检验 linux告警记录信息
     @Transactional
-    private void insertWarnLinuxRecord(String monitorIp, List<ZrLinuxRecordEleDO> linuxRecordList){
+    public void insertWarnLinuxRecord(String monitorIp, List<ZrLinuxRecordEleDO> linuxRecordList){
         if (linuxRecordList == null || linuxRecordList.isEmpty()) {
             return;
         }

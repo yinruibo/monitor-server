@@ -69,10 +69,10 @@ public class SysWarnDeployInput extends AbstractPageQuery {
     private String remarks;
 
     /**
-     * 阈值消息：0：发送，1：不发送
+     * 告警配置状态：0：启用，1：禁用
      */
-    @ApiModelProperty(value="阈值消息：0：发送，1：不发送")
-    private Integer news;
+    @ApiModelProperty(value="告警配置状态：0：启用，1：禁用")
+    private Integer status;
 
     /**
      * 邮箱-阈值发送邮件

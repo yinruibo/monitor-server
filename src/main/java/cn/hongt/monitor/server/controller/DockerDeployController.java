@@ -2,6 +2,7 @@ package cn.hongt.monitor.server.controller;
 
 import cn.hongt.monitor.server.common.utils.Result;
 import cn.hongt.monitor.server.common.utils.ResultUtil;
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.DockerDeployInput;
 import cn.hongt.monitor.server.entity.SysDockerDeployEleDO;
 import cn.hongt.monitor.server.service.ZrDockerDeployService;
@@ -42,8 +43,8 @@ public class DockerDeployController {
     // 批量删除配置信息
     @PostMapping("/deleteDeployList")
     @ApiOperation(value = "批量删除配置信息", httpMethod = "POST")
-    public Result deleteDeployList(@RequestBody List<String> idList) {
-        dockerDeployService.deleteDeployList(idList);
+    public Result deleteDeployList(@RequestBody IdListInput input) {
+        dockerDeployService.deleteDeployList(input);
         return ResultUtil.success();
     }
 

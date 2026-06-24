@@ -1,5 +1,7 @@
 package cn.hongt.monitor.server.controller;
 
+import cn.hongt.monitor.server.dto.input.IdListInput;
+import cn.hongt.monitor.server.dto.input.NodeDataInput;
 import cn.hongt.monitor.server.dto.input.ZrWarnRecordListInput;
 import cn.hongt.monitor.server.dto.output.WarnFaultOutput;
 import cn.hongt.monitor.server.service.ZrWarnRecordEleService;
@@ -32,10 +34,10 @@ public class ZrWarnRecordEleController {
         return ResultUtil.success(zrWarnRecordEleService.queryWarnDepList(zrWarnRecordListInput));
     }
 
-    @GetMapping("/deleteWarnRecord")  // 清除单个/所有
-    @ApiOperation(value = "删除告警日志", httpMethod = "GET")
-    public Result deleteWarnRecord(@RequestParam("ids") List<String> ids) {
-        zrWarnRecordEleService.deleteWarnRecord(ids);
+    @PostMapping("/deleteWarnRecord")  // 清除单个/所有
+    @ApiOperation(value = "删除告警日志", httpMethod = "POST")
+    public Result deleteWarnRecord(@Validated @RequestBody IdListInput input) {
+        zrWarnRecordEleService.deleteWarnRecord(input);
         return ResultUtil.success();
     }
 
@@ -54,22 +56,22 @@ public class ZrWarnRecordEleController {
         return zrWarnRecordEleService.queryFaultList(input);
     }
 
-    @GetMapping("/queryExport")
-    @ApiOperation(value = "导出Excel表格", httpMethod = "GET")
-    public Result<String> queryExport(@RequestParam("idList") List<String> idList) {
-        return zrWarnRecordEleService.queryExport(idList);
+    @PostMapping("/queryExport")
+    @ApiOperation(value = "导出Excel表格", httpMethod = "POST")
+    public Result<String> queryExport(@Validated @RequestBody IdListInput input) {
+        return zrWarnRecordEleService.queryExport(input);
     }
 
-    @GetMapping("/queryTimingUpdate")
-    @ApiOperation(value = "更新告警日志列表的持续时间-不对前端开放", httpMethod = "GET")
+    @PostMapping("/queryTimingUpdate")
+    @ApiOperation(value = "更新告警日志列表的持续时间-不对前端开放", httpMethod = "POST")
     public Result<String> queryTimingUpdate() {
         return zrWarnRecordEleService.queryTimingUpdate();
     }
 
-    @GetMapping("/queryWarnNumber")
-    @ApiOperation(value = "查询当日告警数量", httpMethod = "GET")
-    public Result<Integer> queryWarnNumber(@RequestParam("ip") String ip) {
-        return zrWarnRecordEleService.queryWarnNumber(ip);
+    @PostMapping("/queryWarnNumber")
+    @ApiOperation(value = "查询当日告警数量", httpMethod = "POST")
+    public Result<Integer> queryWarnNumber(@Validated @RequestBody NodeDataInput input) {
+        return zrWarnRecordEleService.queryWarnNumber(input.getIp());
     }
 
 }

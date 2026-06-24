@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 
 @Slf4j
 @Configuration
-public class GlobalAsyncExceptionHandlerConfig implements AsyncConfigurer {
+public class GlobalAsyncExceptionConfig implements AsyncConfigurer {
 
     @Override
     public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {

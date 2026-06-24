@@ -1,5 +1,6 @@
 package cn.hongt.monitor.server.service;
 
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.LinuxDeployInput;
 import cn.hongt.monitor.server.entity.SysLinuxDeployDO;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -19,6 +20,6 @@ public interface ZrLinuxDeployService extends IService<SysLinuxDeployDO> {
 
     void updateDeployList(List<SysLinuxDeployDO> inputList);
 
-    void deleteDeployList(List<String> idList);
+    void deleteDeployList(IdListInput input);
 
 }

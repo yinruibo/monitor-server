@@ -3,15 +3,16 @@ package cn.hongt.monitor.server.common.utils;
 import org.apache.poi.hssf.usermodel.*;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.util.CellRangeAddress;
-
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.Closeable;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.util.List;
 
-public class ExcelObjectUtils {
+public class ExcelObjectUtils implements Closeable {
     private HSSFWorkbook workbook;
     private HSSFSheet sheet;
 
@@ -189,5 +190,12 @@ public class ExcelObjectUtils {
         OutputStream outputStream = response.getOutputStream();
         workbook.write(outputStream);
         outputStream.flush();
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (workbook != null) {
+            workbook.close();
+        }
     }
 }

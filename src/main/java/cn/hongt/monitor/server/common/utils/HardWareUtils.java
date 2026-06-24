@@ -20,11 +20,11 @@ import java.util.List;
 public class HardWareUtils {
 
     /**
-     * linux数据分割，list
+     * 监控数据分割，list
      * @param list  查询出来的cpu 的数据
      * @param  input  前端传过来的实体类
      */
-    public static List<HardresultOutput> getLinuxInter(List<LinuxValueOutput> list, HardWareMonitorInput input){
+    public static List<HardresultOutput> spiltMonitorData(List<LinuxValueOutput> list, HardWareMonitorInput input){
 
         //        将String类型的时间转化为 Long时间戳
         Long start = getTimeToLong(input.getStartTime(), DateUtils.dateType5);
@@ -56,17 +56,17 @@ public class HardWareUtils {
 //        boolean sfqt =false;
         if(12< hour && hour <=24){
             // 1 天   30秒interval = 6;
-            interval = 6;
+            interval = 2;
         }else if(24< hour && hour <=72){ // 1~3天 interval = 18;
             interval = 3;
         }else if(72< hour && hour <=168){ // 3~7天
             // 7 天   105秒interval = 21;
-            interval = 3;
+            interval = 5;
 //            sfqt = true;
         }else if(168< hour && hour <=336){ // 7~14天
-            interval = 6; // 间隔 84 * 5s / 60s= 7分钟 取一条数据 interval = 42;
+            interval = 8; // 间隔 84 * 5s / 60s= 7分钟 取一条数据 interval = 42;
         }else if(336< hour ){ // 大于14天
-            interval = 6;
+            interval = 12;
         }
 
 //        if(sfqt){
@@ -151,25 +151,25 @@ public class HardWareUtils {
             HardresultOutput output = new HardresultOutput();
             // 计算最大值
             if(list.get(i).getValues() < list.get(i+1).getValues()){
-                output.setMaximum(list.get(i+1).getValues());
-                output.setMinimum(list.get(i).getValues());
+                output.setMaxNum(list.get(i+1).getValues());
+                output.setMinNum(list.get(i).getValues());
             }else {
-                output.setMaximum(list.get(i).getValues());
-                output.setMinimum(list.get(i+1).getValues());
+                output.setMaxNum(list.get(i).getValues());
+                output.setMinNum(list.get(i+1).getValues());
             }
             output.setTimestamp(list.get(i+1).getTime());
             DecimalFormat df = new DecimalFormat("######0.00");
             // double avg = Double.valueOf(df.format(list.get(i).getValues() + list.get(i+1).getValues()/2));
-            double avg = Double.valueOf(df.format((output.getMaximum()+output.getMinimum())/2));
+            double avg = Double.valueOf(df.format((output.getMaxNum()+output.getMinNum())/2));
             output.setAverage(avg);
             output.setUnit(list.get(i + 1).getUnit());
             outList.add(output);
         }
         if(hardresultOutput!=null){
             HardresultOutput output = new HardresultOutput();
-            output.setMaximum(hardresultOutput.getValues());
+            output.setMaxNum(hardresultOutput.getValues());
             output.setAverage(hardresultOutput.getValues());
-            output.setMinimum(hardresultOutput.getValues());
+            output.setMinNum(hardresultOutput.getValues());
             output.setTimestamp(hardresultOutput.getTime());
             output.setUnit(hardresultOutput.getUnit());
             outList.add(output);

@@ -1,6 +1,7 @@
 package cn.hongt.monitor.server.controller;
 
 import cn.hongt.monitor.server.dto.input.HardWareMonitorInput;
+import cn.hongt.monitor.server.dto.input.NodeDataInput;
 import cn.hongt.monitor.server.dto.output.HardresultOutput;
 import cn.hongt.monitor.server.dto.output.NodeDockerOutput;
 import cn.hongt.monitor.server.service.ZrDockerDeployService;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Docker服务集群监控
@@ -30,17 +32,17 @@ public class DockerMonitorController {
     private ZrDockerDeployService zrDockerDeployService;
 
     // 节点信息监控
-    @GetMapping("/queryNodeList")
-    @ApiOperation(value = "节点信息列表", httpMethod = "GET")
+    @PostMapping("/queryNodeList")
+    @ApiOperation(value = "节点信息列表", httpMethod = "POST")
     public Result queryNodeList() {
         return ResultUtil.success(zrDockerDeployService.queryNodeList());
     }
 
     // 查询-多节点-多服务器信息列表
-    @GetMapping("/queryServersByNode")
-    @ApiOperation(value = "单节点-多服务器信息列表", httpMethod = "GET")
-    public Result queryNodeAndServers(@RequestParam("nodeName") String nodeName) {
-        return ResultUtil.success(zrDockerDeployService.queryNodeAndServers(nodeName));
+    @PostMapping("/queryServersByNode")
+    @ApiOperation(value = "单节点-多服务器信息列表", httpMethod = "POST")
+    public Result queryNodeAndServers(@Validated @RequestBody NodeDataInput input) {
+        return ResultUtil.success(zrDockerDeployService.queryNodeAndServers(input.getNodeName()));
     }
 
     // 服务器信息列表
@@ -50,21 +52,21 @@ public class DockerMonitorController {
         return ResultUtil.success(zrDockerDeployService.queryServerList());
     }
 
-    @GetMapping("/queryDockerNameList")
-    @ApiOperation(value = "单服务器-Docker镜像信息列表", httpMethod = "GET")
-    public Result queryDockerNameList(@RequestParam("nodeName") String nodeName,@RequestParam("ip") String ip) {
-        return ResultUtil.success(zrDockerDeployService.queryDockerNameList(nodeName,ip));
+    @PostMapping("/queryDockerNameList")
+    @ApiOperation(value = "单服务器-Docker镜像信息列表", httpMethod = "POST")
+    public Result queryDockerNameList(@Validated @RequestBody NodeDataInput input) {
+        return ResultUtil.success(zrDockerDeployService.queryDockerNameList(input));
     }
 
-    @GetMapping("/queryNodeDocker")
-    @ApiOperation(value = "单节点-单IP-docker容器-最新监控查询", httpMethod = "GET")
-    public Result<List<NodeDockerOutput>> queryNodeDocker(@RequestParam("nodeName") String nodeName,@RequestParam("ip") String ip) {
-        return zrDockerRecordService.queryNodeDocker(nodeName,ip);
+    @PostMapping("/queryNodeDocker")
+    @ApiOperation(value = "单节点-单IP-docker容器-最新监控查询", httpMethod = "POST")
+    public Result<List<NodeDockerOutput>> queryNodeDocker(@Validated @RequestBody NodeDataInput input) {
+        return zrDockerRecordService.queryNodeDocker(input);
     }
 
     @PostMapping("/queryDockerRecord")
     @ApiOperation(value = "容器监控历史记录查询", httpMethod = "POST")
-    public Result<List<HardresultOutput>> queryDockerRecord(@Validated @RequestBody HardWareMonitorInput input) {
+    public Result<Map<String,Map<String,List<HardresultOutput>>>> queryDockerRecord(@Validated @RequestBody HardWareMonitorInput input) {
         return zrDockerRecordService.queryDockerRecord(input);
     }
 

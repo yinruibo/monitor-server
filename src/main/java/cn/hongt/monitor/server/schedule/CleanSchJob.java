@@ -35,7 +35,7 @@ public class CleanSchJob {
 
     // zr_warn_record_ele、zr_linux_record_ele  表数据最大保留15天
     @Scheduled(cron = "0 0 2 * * ?")
-    @ApiOperation(value = "定时删除-告警日志表", httpMethod = "GET")
+    @ApiOperation(value = "定时删除-告警日志表", httpMethod = "POST")
     public void cleanWarnRecord() {
         ZrWarnRecordEleDO latestRecord = warnRecordEleMapper.selectOne(new LambdaQueryWrapper<ZrWarnRecordEleDO>()
                 .orderByDesc(ZrWarnRecordEleDO::getCreateTime)
@@ -47,7 +47,7 @@ public class CleanSchJob {
     }
 
     @Scheduled(cron = "0 10 2 * * ?")
-    @ApiOperation(value = "定时删除-Linux监控日志表", httpMethod = "GET")
+    @ApiOperation(value = "定时删除-Linux监控日志表", httpMethod = "POST")
     public void cleanLinuxRecord() {
         ZrLinuxRecordEleDO latestRecord = linuxRecordEleMapper.selectOne(new LambdaQueryWrapper<ZrLinuxRecordEleDO>()
                 .orderByDesc(ZrLinuxRecordEleDO::getCreateTime)
@@ -59,7 +59,7 @@ public class CleanSchJob {
     }
 
     @Scheduled(cron = "0 20 2 * * ?")
-    @ApiOperation(value = "定时删除-Docker容器日志表", httpMethod = "GET")
+    @ApiOperation(value = "定时删除-Docker容器日志表", httpMethod = "POST")
     public void cleanDockerRecord() {
         ZrDockerRecordEleDO latestRecord = dockerRecordEleMapper.selectOne(new LambdaQueryWrapper<ZrDockerRecordEleDO>()
                 .orderByDesc(ZrDockerRecordEleDO::getCreateTime)

@@ -1,7 +1,7 @@
 package cn.hongt.monitor.server.service;
 
 import cn.hongt.monitor.server.common.utils.Result;
-import cn.hongt.monitor.server.dto.input.WarnRecMessage;
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.entity.ZrWarnRecordEleDO;
 import cn.hongt.monitor.server.dto.input.ZrWarnRecordListInput;
 import cn.hongt.monitor.server.dto.output.WarnFaultOutput;
@@ -14,13 +14,13 @@ public interface ZrWarnRecordEleService extends IService<ZrWarnRecordEleDO> {
 
     Map<String,Object> queryWarnDepList(ZrWarnRecordListInput zrWarnRecordListInput);
 
-    void deleteWarnRecord(List<String> ids);
+    void deleteWarnRecord(IdListInput input);
 
     Map<String,Object> queryWarnSignList(ZrWarnRecordListInput input);
 
     Result<List<WarnFaultOutput>> queryFaultList(ZrWarnRecordListInput input);
 
-    Result<String> queryExport(List<String> idList);
+    Result<String> queryExport(IdListInput input);
 
     Result<String> queryTimingUpdate();
 

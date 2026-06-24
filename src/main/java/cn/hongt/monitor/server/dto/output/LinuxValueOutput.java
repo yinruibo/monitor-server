@@ -18,7 +18,7 @@ public class LinuxValueOutput {
 
     // 时间
     @ApiModelProperty(value="时间戳")
-    private Date Time;
+    private Date time;
     // 值
     @ApiModelProperty(value="值")
     private double values;

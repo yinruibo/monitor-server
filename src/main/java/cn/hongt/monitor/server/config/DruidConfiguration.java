@@ -21,7 +21,7 @@ public class DruidConfiguration {
         // IP黑名单(共同存在时，deny优先于allow) -- 默认均可访问
 //        registrationBean.addInitParameter("deny", "192.168.1.100");
         //是否能够重置数据 禁用HTML页面上的“Reset All”功能
-        registrationBean.addInitParameter("resetEnable", "true");
+        registrationBean.addInitParameter("resetEnable", "false");
         // 需要监控的 url路径
         registrationBean.addUrlMappings("/druid/*");
         return registrationBean;

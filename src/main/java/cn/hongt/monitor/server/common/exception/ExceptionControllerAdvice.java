@@ -4,7 +4,6 @@ package cn.hongt.monitor.server.common.exception;
 import cn.hongt.monitor.server.common.utils.Result;
 import cn.hongt.monitor.server.common.utils.ResultUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.validator.internal.engine.path.PathImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.CollectionUtils;
 import org.springframework.validation.BindException;
@@ -17,7 +16,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.ConstraintViolationException;
+import javax.validation.Path;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -102,8 +103,13 @@ public class ExceptionControllerAdvice {
         }
         Map<String, String> map = violations.stream()
                 .collect(Collectors.toMap(o -> {
-                    PathImpl x = (PathImpl) o.getPropertyPath();
-                    return x.getLeafNode().toString();
+                    Path propertyPath = o.getPropertyPath();
+                    String leafName = propertyPath.toString();
+                    Iterator<Path.Node> it = propertyPath.iterator();
+                    while (it.hasNext()) {
+                        leafName = it.next().getName();
+                    }
+                    return leafName;
                 }, ConstraintViolation::getMessage, (k1, k2) -> k1));
         return ResultUtil.errorMsg(map.toString());
     }

@@ -3,6 +3,7 @@ package cn.hongt.monitor.server.service.impl;
 import cn.hongt.monitor.server.common.utils.Result;
 import cn.hongt.monitor.server.common.utils.ResultUtil;
 import cn.hongt.monitor.server.controller.UpdateMapDataController;
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.InsertSysWarnDeployInput;
 import cn.hongt.monitor.server.dto.input.SysWarnDeployInput;
 import cn.hongt.monitor.server.dto.output.SysWarnDeployOutput;
@@ -36,26 +37,22 @@ public class SysWarnDeployServiceImpl extends ServiceImpl<SysWarnDeployMapper, S
     public Result<String> insertWarnDep(InsertSysWarnDeployInput insertSysWarnDeploy) {
         String lockKey = buildWarnDepInsertLockKey(insertSysWarnDeploy);
         Object lock = warnDepInsertLocks.computeIfAbsent(lockKey, key -> new Object());
-        try {
-            synchronized (lock) {
-                SysWarnDeployDO sysWarnDeploy = queryActiveWarnDeploy(insertSysWarnDeploy.getIp(), insertSysWarnDeploy.getWarnType());
-                if (sysWarnDeploy != null) {
-                    return ResultUtil.errorMsg("告警类型不可重复新增");
-                }
-                SysWarnDeployDO sysWarnDeployDO = new SysWarnDeployDO();
-                BeanUtils.copyProperties(insertSysWarnDeploy, sysWarnDeployDO);
-        // 告警配置主键统一改成 Hutool UUID，避免项目里继续混用两套 ID 生成规则。
-        sysWarnDeployDO.setWarnId(IdUtil.fastSimpleUUID());
-                sysWarnDeployDO.setStatus(0);
-                sysWarnDeployDO.setCreateTime(new Date());
-                int i = this.baseMapper.insert(sysWarnDeployDO);
-                if (0 == i) {
-                    return ResultUtil.errorMsg("新增告警信息失败");
-                }
-                return ResultUtil.success("新增告警信息成功");
+        synchronized (lock) {
+            SysWarnDeployDO sysWarnDeploy = queryActiveWarnDeploy(insertSysWarnDeploy.getIp(), insertSysWarnDeploy.getWarnType());
+            if (sysWarnDeploy != null) {
+                return ResultUtil.errorMsg("告警类型不可重复新增");
             }
-        } finally {
-            warnDepInsertLocks.remove(lockKey, lock);
+            SysWarnDeployDO sysWarnDeployDO = new SysWarnDeployDO();
+            BeanUtils.copyProperties(insertSysWarnDeploy, sysWarnDeployDO);
+            // 告警配置主键统一改成 Hutool UUID，避免项目里继续混用两套 ID 生成规则。
+            sysWarnDeployDO.setWarnId(IdUtil.fastSimpleUUID());
+            sysWarnDeployDO.setStatus(0);
+            sysWarnDeployDO.setCreateTime(new Date());
+            int i = this.baseMapper.insert(sysWarnDeployDO);
+            if (0 == i) {
+                return ResultUtil.errorMsg("新增告警信息失败");
+            }
+            return ResultUtil.success("新增告警信息成功");
         }
     }
 
@@ -105,8 +102,8 @@ public class SysWarnDeployServiceImpl extends ServiceImpl<SysWarnDeployMapper, S
     }
 
     @Override
-    public Result<String> deleteWarnDep(SysWarnDeployInput sysWarnDepInput) {
-        int i = this.baseMapper.deleteById(sysWarnDepInput.getWarnId());
+    public Result<String> deleteWarnDep(IdListInput input) {
+        int i = this.baseMapper.deleteBatchIds(input.getIdList());
         if (0 == i) {
             return ResultUtil.errorMsg("告警信息删除失败");
         }
@@ -114,10 +111,10 @@ public class SysWarnDeployServiceImpl extends ServiceImpl<SysWarnDeployMapper, S
     }
 
     @Override
-    public Result<String> warnDepStart(String id, Integer code) {
+    public Result<String> warnDepStart(SysWarnDeployInput input) {
         LambdaUpdateWrapper<SysWarnDeployDO> updateWrapper = new LambdaUpdateWrapper<>();
-        updateWrapper.set(SysWarnDeployDO::getStatus, code);
-        updateWrapper.eq(SysWarnDeployDO::getWarnId, id);
+        updateWrapper.set(SysWarnDeployDO::getStatus, input.getStatus());
+        updateWrapper.eq(SysWarnDeployDO::getWarnId, input.getWarnId());
         int i = this.baseMapper.update(null, updateWrapper);
         updateController.updateWarnDepMap();
         if (0 == i) {

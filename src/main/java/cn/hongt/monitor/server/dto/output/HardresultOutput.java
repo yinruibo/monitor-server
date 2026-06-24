@@ -24,19 +24,19 @@ public class HardresultOutput {
      * 最大值
      */
     @ApiModelProperty(value="最大值")
-    private double Minimum;
+    private double maxNum;
 
     /**
      * 最小值
      */
     @ApiModelProperty(value="最小值")
-    private double Maximum;
+    private double minNum;
 
     /**
      * 平均值
      */
     @ApiModelProperty(value="平均值")
-    private double Average;
+    private double average;
 
     /**
      * 当前时间序列展示单位

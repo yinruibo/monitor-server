@@ -1,14 +1,13 @@
 package cn.hongt.monitor.server.service.impl;
 
 import cn.hongt.monitor.server.common.consts.StationConst;
-import cn.hongt.monitor.server.common.utils.DateUtils;
-import cn.hongt.monitor.server.common.utils.MetricUnitUtil;
+import cn.hongt.monitor.server.common.utils.*;
 import cn.hongt.monitor.server.dto.input.HardWareMonitorInput;
+import cn.hongt.monitor.server.dto.input.NodeDataInput;
 import cn.hongt.monitor.server.dto.output.NodeMonitorOutput;
 import cn.hongt.monitor.server.entity.SysLinuxDeployDO;
 import cn.hongt.monitor.server.enums.WarnRecordEnum;
 import cn.hongt.monitor.server.service.ZrLinuxRecordService;
-import cn.hongt.monitor.server.common.utils.HardWareUtils;
 import cn.hongt.monitor.server.dto.output.HardresultOutput;
 import cn.hongt.monitor.server.dto.output.LinuxValueOutput;
 import cn.hongt.monitor.server.entity.ZrLinuxRecordEleDO;
@@ -20,8 +19,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Service
@@ -30,39 +32,78 @@ public class ZrLinuxRecordServiceImpl extends ServiceImpl<ZrLinuxRecordEleMapper
     @Autowired
     private ZrLinuxDeployMapper linuxDeployMapper;
 
+    @Autowired
+    @Qualifier("queryMonitorExecutor")
+    private Executor queryMonitorExecutor;
+
     @Override
-    public List<HardresultOutput> queryServerRecord(HardWareMonitorInput input) {
-        List<HardresultOutput> resultList = new ArrayList<>();
+    public Result<Map<String,List<HardresultOutput>>> queryServerRecord(HardWareMonitorInput input) {
+        Map<String,List<HardresultOutput>> resultMap = new ConcurrentHashMap<>();
+
+        if(StringUtils.isBlank(input.getStartTime())){
+            return ResultUtil.errorMsg("未传入开始时间");
+        }
+
         String startTime = input.getStartTime();
-        //        硬件监控的开始时间
+        // 硬件监控的开始时间
         Date start = DateUtils.stringToDate(input.getStartTime(),DateUtils.dateType5);
-        // 2022-12-08 14:49:10.119
-        if("5".equals(startTime.substring(startTime.length()-1,startTime.length()))){
+        if("5".equals(startTime.substring(startTime.length()-1))){
             start = DateUtils.addDate(start,0,0,0,0,0,-5,0);
         }
         input.setStartTime(DateUtils.dateToString(start,DateUtils.dateType5));
+
+        if( StringUtils.isBlank(input.getIp())|| input.getTypeList() == null || input.getTypeList().isEmpty()){
+            return ResultUtil.errorMsg("未传入IP、要素等信息");
+        }
+
         // 查询数据库最新时间，以确定 时间段的结束时间
         Date end = queryEndTime(input);
-        if(end == null || StringUtils.isBlank(input.getIp())){
-            return resultList;
-        }
-        // 如果配置文件，配置此 Type为不可查询，则返回结果为 空
-        List<SysLinuxDeployDO> linuxDeployList = linuxDeployMapper.selectList(new QueryWrapper<SysLinuxDeployDO>().lambda()
-            .eq(SysLinuxDeployDO::getIp,input.getIp()).eq(SysLinuxDeployDO::getIsShow,0));
-        if(linuxDeployList.isEmpty()){
-            return resultList;
+        if(end == null){
+            return ResultUtil.success(resultMap);
         }
 
-        List<ZrLinuxRecordEleDO> hardWareList = this.baseMapper.selectList(new QueryWrapper<ZrLinuxRecordEleDO>().lambda()
-            .eq(ZrLinuxRecordEleDO::getIp,input.getIp()).eq(ZrLinuxRecordEleDO::getType,input.getType())
-                .between(ZrLinuxRecordEleDO::getCreateTime,start,end).orderByAsc(ZrLinuxRecordEleDO::getCreateTime));
+        // 使用 queryMonitorExecutor 线程池并行查询各 type 的监控数据
+        Date finalStart = start;
+        Date finalEnd = end;
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-        List<LinuxValueOutput> serverlist = buildSeriesForQuery(hardWareList, input.getType());
+        for(String type : input.getTypeList()){
+            // 如果配置文件配置此 Type 为不可查询，则跳过
+            SysLinuxDeployDO linuxDeploy = StationConst.linuxDepMap.get(type);
+            if(linuxDeploy == null || linuxDeploy.getIsShow() == 1){
+                continue;
+            }
 
-        if(!serverlist.isEmpty()){
-            resultList = HardWareUtils.getLinuxInter(serverlist,input);
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                List<ZrLinuxRecordEleDO> hardWareList = this.baseMapper.selectList(
+                    new QueryWrapper<ZrLinuxRecordEleDO>().lambda()
+                        .eq(ZrLinuxRecordEleDO::getIp, input.getIp())
+                        .eq(ZrLinuxRecordEleDO::getType, type)
+                        .between(ZrLinuxRecordEleDO::getCreateTime, finalStart, finalEnd)
+                        .orderByAsc(ZrLinuxRecordEleDO::getCreateTime));
+
+                List<LinuxValueOutput> serverlist = buildSeriesForQuery(hardWareList, type);
+
+                List<HardresultOutput> resultList = new ArrayList<>();
+                if(!serverlist.isEmpty()){
+                    resultList = HardWareUtils.spiltMonitorData(serverlist, input);
+                }
+                resultMap.put(type, resultList);
+            }, queryMonitorExecutor);
+
+            futures.add(future);
         }
-        return resultList;
+
+        // 等待所有查询任务完成，设置 30 秒超时防止线程阻塞
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(30, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            log.error("Linux监控数据并行查询超时(30s)，ip={}", input.getIp());
+        } catch (Exception e) {
+            log.error("Linux监控数据并行查询异常，ip={}", input.getIp(), e);
+        }
+
+        return ResultUtil.success(resultMap);
     }
 
     /*
@@ -73,8 +114,9 @@ public class ZrLinuxRecordServiceImpl extends ServiceImpl<ZrLinuxRecordEleMapper
         Date start = DateUtils.stringToDate(input.getStartTime(),DateUtils.dateType5);
         //        前端传过来 的结束时间
         Date end = DateUtils.stringToDate(input.getEndTime(),DateUtils.dateType5);
-        // 查询数据库最新时间   系统信息监测表
+        // 查询数据库最新时间   系统信息监测表（按 IP 过滤，避免返回其他 IP 的数据）
         List<ZrLinuxRecordEleDO> hardWareList = this.baseMapper.selectList(new LambdaQueryWrapper<ZrLinuxRecordEleDO>()
+                .eq(StringUtils.isNotBlank(input.getIp()), ZrLinuxRecordEleDO::getIp, input.getIp())
                 .orderByDesc(ZrLinuxRecordEleDO::getCreateTime).last(StationConst.LIMIT_DATA_SERVER));
         if(hardWareList.isEmpty()){
             return null;
@@ -91,21 +133,21 @@ public class ZrLinuxRecordServiceImpl extends ServiceImpl<ZrLinuxRecordEleMapper
     }
 
     @Override
-    public NodeMonitorOutput queryNodeMonitor(String nodeName,String ip) {
+    public NodeMonitorOutput queryNodeMonitor(NodeDataInput input) {
         NodeMonitorOutput output = new NodeMonitorOutput();
         List<NodeMonitorOutput.DiskOutput> diskList = new ArrayList<>();
         // 读取配置表获取Ip名称
         List<SysLinuxDeployDO> linuxDeployList = linuxDeployMapper.selectList(new QueryWrapper<SysLinuxDeployDO>().lambda()
-                .eq(SysLinuxDeployDO::getIp,ip).isNotNull(SysLinuxDeployDO::getIpName).eq(SysLinuxDeployDO::getIsShow,0));
+                .eq(SysLinuxDeployDO::getIp,input.getIp()).isNotNull(SysLinuxDeployDO::getIpName).eq(SysLinuxDeployDO::getIsShow,0));
         if(linuxDeployList.isEmpty()){
             return output;
         }
 
-        output.setNodeName(nodeName);
+        output.setNodeName(input.getNodeName());
         output.setIpName(linuxDeployList.get(0).getIpName());
-        output.setIp(ip);
+        output.setIp(input.getIp());
         List<ZrLinuxRecordEleDO> linuxRecord = this.baseMapper.selectList(new LambdaQueryWrapper<ZrLinuxRecordEleDO>()
-                .eq(ZrLinuxRecordEleDO::getIp,ip).orderByDesc(ZrLinuxRecordEleDO::getCreateTime).last("limit 10 offset 0"));
+                .eq(ZrLinuxRecordEleDO::getIp,input.getIp()).orderByDesc(ZrLinuxRecordEleDO::getCreateTime).last("limit 10 offset 0"));
         for(ZrLinuxRecordEleDO record : linuxRecord){
             if(record.getType().equals(WarnRecordEnum.linux_cpu.getCode()) ||
                     record.getType().equals(WarnRecordEnum.win_cpu.getCode())){
@@ -149,7 +191,7 @@ public class ZrLinuxRecordServiceImpl extends ServiceImpl<ZrLinuxRecordEleMapper
                 try {
                     valuesInKb.add(MetricUnitUtil.toKbPerSecond(Double.parseDouble(hard.getDataRate()), hard.getUnit()));
                     timeList.add(hard.getCreateTime());
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException | NullPointerException e) {
                     log.warn("Linux监控数据格式异常，跳过: type={}, dataRate={}", hard.getType(), hard.getDataRate());
                 }
             }
@@ -160,11 +202,11 @@ public class ZrLinuxRecordServiceImpl extends ServiceImpl<ZrLinuxRecordEleMapper
         for (ZrLinuxRecordEleDO hard : hardWareList) {
             try {
                 serverList.add(LinuxValueOutput.builder()
-                    .Time(hard.getCreateTime())
+                    .time(hard.getCreateTime())
                     .values(Double.parseDouble(hard.getDataRate()))
                     .unit(hard.getUnit())
                     .build());
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException | NullPointerException e) {
                 log.warn("Linux监控数据格式异常，跳过: type={}, dataRate={}", hard.getType(), hard.getDataRate());
             }
         }
@@ -181,7 +223,7 @@ public class ZrLinuxRecordServiceImpl extends ServiceImpl<ZrLinuxRecordEleMapper
         List<LinuxValueOutput> result = new ArrayList<>();
         for (int i = 0; i < convertedValues.size(); i++) {
             result.add(LinuxValueOutput.builder()
-                .Time(timeList.get(i))
+                .time(timeList.get(i))
                 .values(convertedValues.get(i))
                 .unit(displayUnit)
                 .build());

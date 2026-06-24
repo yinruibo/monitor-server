@@ -7,25 +7,22 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
-*
-*/
-@ApiModel(value="节点Docker监控接收数据")
+ *
+ */
+@ApiModel(value="Id列表数据")
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class NodeDockerInput {
+public class IdListInput {
 
     /**
-    * 服务器IP
-    */
-    @ApiModelProperty("服务器IP")
-    private String ip;
-
-    /**
-     * 服务器IP
+     * Id列表
      */
-    @ApiModelProperty("节点名称")
-    private String nodeName;
+    @ApiModelProperty("Id列表")
+    private List<String> idList;
+
 }

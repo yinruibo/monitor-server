@@ -2,6 +2,7 @@ package cn.hongt.monitor.server.service;
 
 
 import cn.hongt.monitor.server.common.utils.Result;
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.InsertSysWarnDeployInput;
 import cn.hongt.monitor.server.dto.input.SysWarnDeployInput;
 import cn.hongt.monitor.server.dto.output.SysWarnDeployOutput;
@@ -18,8 +19,8 @@ public interface SysWarnDeployService extends IService<SysWarnDeployDO> {
 
     Result<String> updateWarnDep(SysWarnDeployInput sysWarnDepInput);
 
-    Result<String> deleteWarnDep(SysWarnDeployInput sysWarnDepInput);
+    Result<String> deleteWarnDep(IdListInput input);
 
-    Result<String> warnDepStart(String Id,Integer code);
+    Result<String> warnDepStart(SysWarnDeployInput input);
 
 }

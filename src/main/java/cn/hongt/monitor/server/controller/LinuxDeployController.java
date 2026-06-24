@@ -2,6 +2,7 @@ package cn.hongt.monitor.server.controller;
 
 import cn.hongt.monitor.server.common.utils.Result;
 import cn.hongt.monitor.server.common.utils.ResultUtil;
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.LinuxDeployInput;
 import cn.hongt.monitor.server.entity.SysLinuxDeployDO;
 import cn.hongt.monitor.server.service.ZrLinuxDeployService;
@@ -39,10 +40,10 @@ public class LinuxDeployController {
     }
 
     // 批量删除配置信息
-    @GetMapping("/deleteDeployList")
-    @ApiOperation(value = "批量删除配置信息", httpMethod = "GET")
-    public Result deleteDeployList(@RequestParam("idList") List<String> idList) {
-        linuxDeployService.deleteDeployList(idList);
+    @PostMapping("/deleteDeployList")
+    @ApiOperation(value = "批量删除配置信息", httpMethod = "POST")
+    public Result deleteDeployList(@RequestBody IdListInput input) {
+        linuxDeployService.deleteDeployList(input);
         return ResultUtil.success();
     }
 

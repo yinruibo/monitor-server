@@ -9,6 +9,4 @@ import java.util.List;
 
 @Mapper
 public interface ZrDockerRecordEleMapper extends BaseMapper<ZrDockerRecordEleDO> {
-    // 未启用
-    void batchInsert(@Param("list") List<ZrDockerRecordEleDO> list);
 }

@@ -1,5 +1,6 @@
 package cn.hongt.monitor.server.service.impl;
 
+import cn.hongt.monitor.server.dto.input.IdListInput;
 import cn.hongt.monitor.server.dto.input.LinuxDeployInput;
 import cn.hongt.monitor.server.entity.SysLinuxDeployDO;
 import cn.hongt.monitor.server.mapper.ZrLinuxDeployMapper;
@@ -37,7 +38,7 @@ public class ZrLinuxDeployServiceImpl extends ServiceImpl<ZrLinuxDeployMapper, S
     public List<SysLinuxDeployDO> queryNodeAndServers(String nodeName) {
         return this.baseMapper.selectList(new QueryWrapper<SysLinuxDeployDO>().lambda()
                 .select(SysLinuxDeployDO::getNodeName, SysLinuxDeployDO::getIp, SysLinuxDeployDO::getIpName)
-                .eq(SysLinuxDeployDO::getNodeName, nodeName)
+                .eq(StringUtils.isNotBlank(nodeName),SysLinuxDeployDO::getNodeName, nodeName)
                 .eq(SysLinuxDeployDO::getIsShow, 0)
                 .isNotNull(SysLinuxDeployDO::getIp)
                 .groupBy(SysLinuxDeployDO::getNodeName, SysLinuxDeployDO::getIp, SysLinuxDeployDO::getIpName));
@@ -84,8 +85,8 @@ public class ZrLinuxDeployServiceImpl extends ServiceImpl<ZrLinuxDeployMapper, S
     }
 
     @Override
-    public void deleteDeployList(List<String> idList) {
-        this.baseMapper.deleteBatchIds(idList);
+    public void deleteDeployList(IdListInput input) {
+        this.baseMapper.deleteBatchIds(input.getIdList());
     }
 
     private SysLinuxDeployDO buildBatchUpdateEntity(SysLinuxDeployDO input) {

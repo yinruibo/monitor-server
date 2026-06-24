@@ -268,9 +268,10 @@ public class DockerMetricCollectorServiceImpl implements DockerMetricCollectorSe
     }
 
     private void closeSubscriptionOnly(String containerId) {
-        StatsStreamCallback callback = subscriptions.remove(containerId);
+        StatsStreamCallback callback = subscriptions.get(containerId);
         if (callback != null) {
             closeQuietly(callback);
+            subscriptions.remove(containerId, callback);
         }
     }
 

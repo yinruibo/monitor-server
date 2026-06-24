@@ -34,15 +34,36 @@ public class DateUtils {
     public static final String DATE_TIME_FORMAT_YYYY_MM_DD_HH_MI = "yyyy-MM-dd HH:mm";
     public static final String DATE_TIME_FORMAT_YYYY_MM_DD_HH_MI_SS = "yyyy-MM-dd HH:mm:ss";
 
+    /**
+     * ThreadLocal 缓存 SimpleDateFormat，避免每次调用都创建新对象
+     * key: 日期格式字符串
+     * value: SimpleDateFormat 实例（每个线程独立副本）
+     */
+    private static final ThreadLocal<Map<String, SimpleDateFormat>> SDF_CACHE = ThreadLocal.withInitial(HashMap::new);
+
+    /**
+     * 获取线程安全的 SimpleDateFormat 实例
+     * @param pattern 日期格式
+     * @return SimpleDateFormat 实例
+     */
+    private static SimpleDateFormat getSdf(String pattern) {
+        Map<String, SimpleDateFormat> cache = SDF_CACHE.get();
+        SimpleDateFormat sdf = cache.get(pattern);
+        if (sdf == null) {
+            sdf = new SimpleDateFormat(pattern);
+            sdf.setTimeZone(TimeZone.getTimeZone("GMT+8"));
+            cache.put(pattern, sdf);
+        }
+        return sdf;
+    }
+
     public static LocalDateTime currentTime() {
         return LocalDateTime.now();
     }
 
     //date to string
     public static String dateToString(Date date, String format){
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(format);
-        simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT+8"));
-        return simpleDateFormat.format(date);
+        return getSdf(format).format(date);
     }
 
     //LocalDateTime 转 Date
@@ -60,16 +81,14 @@ public class DateUtils {
     //string to date
     @SneakyThrows
     public static Date stringToDate(String date, String format){
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(format);
-        simpleDateFormat.setTimeZone(TimeZone.getTimeZone("GMT+8"));
-        return simpleDateFormat.parse(date);
+        return getSdf(format).parse(date);
     }
 
     //时间格式转化
     @SneakyThrows
     public static Date dateFormat(Date date, String str){
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(str);
-        return simpleDateFormat.parse(simpleDateFormat.format(date));
+        SimpleDateFormat sdf = getSdf(str);
+        return sdf.parse(sdf.format(date));
     }
 
     /**
@@ -204,7 +223,7 @@ public class DateUtils {
      * @throws ParseException
      */
     public static int daysBetween(Date smdate,Date bdate) throws ParseException {
-        SimpleDateFormat sdf=new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat sdf = getSdf("yyyy-MM-dd");
         smdate=sdf.parse(sdf.format(smdate));
         bdate=sdf.parse(sdf.format(bdate));
         Calendar cal = Calendar.getInstance();
@@ -222,7 +241,7 @@ public class DateUtils {
      *字符串的日期格式的计算
      */
     public static int daysBetween(String smdate,String bdate) throws ParseException{
-        SimpleDateFormat sdf=new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat sdf = getSdf("yyyy-MM-dd");
         Calendar cal = Calendar.getInstance();
         cal.setTime(sdf.parse(smdate));
         long time1 = cal.getTimeInMillis();
@@ -240,7 +259,7 @@ public class DateUtils {
      * @return
      */
     public static List<String> getMonthFullDay(int year , int month){
-        SimpleDateFormat dateFormatYYYYMMDD = new SimpleDateFormat("yyyyMMdd");
+        SimpleDateFormat dateFormatYYYYMMDD = getSdf("yyyyMMdd");
         List<String> fullDayList = new ArrayList<>(32);
         // 获得当前日期对象
         Calendar cal = Calendar.getInstance();
@@ -264,7 +283,7 @@ public class DateUtils {
      * @param minTime 小时间  例如：2021010100
      */
     public static int hoursDiffByString(String maxTime,String minTime) throws ParseException{
-        SimpleDateFormat sdf=new SimpleDateFormat(dateType1);
+        SimpleDateFormat sdf = getSdf(dateType1);
         Calendar cal = Calendar.getInstance();
         cal.setTime(sdf.parse(maxTime));
         long time1 = cal.getTimeInMillis();
@@ -280,7 +299,6 @@ public class DateUtils {
      * @param minTime 小时间
      */
     public static int hoursDiffByDate(Date maxTime,Date minTime){
-        SimpleDateFormat sdf=new SimpleDateFormat(dateType1);
         Calendar cal = Calendar.getInstance();
         cal.setTime(maxTime);
         long time1 = cal.getTimeInMillis();
